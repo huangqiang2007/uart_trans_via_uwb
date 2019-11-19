@@ -13,7 +13,7 @@
 //volatile uint8_t g_slaveStatus = 0;
 uint8_t cnt[4];
 
-extern volatile uint32_t g_Ticks;
+//extern volatile uint32_t g_Ticks;
 //extern volatile uint32_t tx_start_times;
 
 void globalInit(void)

@@ -48,11 +48,19 @@ volatile uint32_t g_wakup_timeout; /* the count of 1ms unit */
 volatile uint32_t g_idle_judge;
 
 void timer_init(void);
-void delayms(uint32_t ms);
+//void delayms(uint32_t ms);
 void setupTimer0(void);
 void setupTimer1(void);
 extern void Delay_ms(uint32_t ms);
 extern void Delay_us(uint32_t us);
 extern void timerInit(void);
+
+typedef enum
+{
+	run,
+	stop
+}TIMER_STATUS;
+
+extern TIMER_STATUS TIMER0_status;
 
 #endif /* INLCUDE_TIMER_H_ */

@@ -7,7 +7,9 @@
 #include "em_timer.h"
 #include "em_chip.h"
 #include "em_gpio.h"
+#include "em_dma.h"
 #include "timer.h"
+#include "uartdrv.h"
 
 // Freq = 25M
 #define TOP 25000
@@ -16,9 +18,10 @@
 #define MAX_TICK (0xFFFFFFF0 - WAKUP_DURATION)
 
 volatile bool Timer1_overflow;
-volatile uint32_t g_Ticks = 0;
+//volatile uint32_t g_Ticks = 0;
 volatile uint32_t tx_start_times = 0;
 volatile uint32_t tx_finish_times = 0;
+
 /**************************************************************************//**
  * @brief TIMER0_IRQHandler
  * Interrupt Service Routine TIMER0 Interrupt Line
@@ -27,9 +30,19 @@ void TIMER0_IRQHandler(void)
 {
 	/* Clear flag for TIMER0 overflow interrupt */
 	TIMER_IntClear(TIMER0, TIMER_IF_OF);
-	g_Ticks++;
-	if (g_Ticks > 0xFFFFFFF0 - WAKUP_DURATION)
-		g_Ticks = 0;
+//	g_Ticks++;
+//	if (g_Ticks > 0xFFFFFFF0 - WAKUP_DURATION)
+//		g_Ticks = 0;
+
+	/* Disable TIMER */
+	TIMER_Enable(TIMER0, false);
+
+	TIMER0_status = stop;
+
+	/*
+	 * set DMA_CHANNEL interrupt flag
+	 * */
+	DMA_IntSet(1<<DMA_CHANNEL);
 }
 
 /**************************************************************************//**
@@ -43,6 +56,9 @@ void TIMER1_IRQHandler(void)
 	Timer1_overflow = true;
 }
 
+#define USART0RX_TIMEOUT_NUM 200
+uint32_t timer0_top_num = 695;
+TIMER_STATUS TIMER0_status = stop;
 
 void setupTimer0(void)
 {
@@ -52,7 +68,7 @@ void setupTimer0(void)
 	/* Select TIMER0 parameters */
 	TIMER_Init_TypeDef timerInit =
 	{
-		.enable     = true,
+		.enable     = false,
 		.debugRun   = true,
 		.prescale   = timerPrescale8,
 		.clkSel     = timerClkSelHFPerClk,
@@ -73,8 +89,8 @@ void setupTimer0(void)
 
 	/* Set TIMER Top value */
 	//TIMER_TopSet(TIMER0, TOP);
-	TIMER_TopSet(TIMER0, MS_COUNT ); //1 ms
-
+	timer0_top_num = (double)CMU_ClockFreqGet(cmuClock_TIMER0) / 8.0 / USART0_BaudRate * 10.0 * USART0RX_TIMEOUT_NUM;
+	TIMER_TopSet(TIMER0, timer0_top_num );
 	/* Configure TIMER */
 	TIMER_Init(TIMER0, &timerInit);
 }
@@ -115,7 +131,7 @@ void setupTimer1(void)
 
 void timer_init(void)
 {
-	g_Ticks = 0;
+//	g_Ticks = 0;
 
 	setupTimer0();
 	setupTimer1();
@@ -124,20 +140,20 @@ void timer_init(void)
 /*
  * precondition: timer0's interrupt interval is 1ms
  * */
-void delayms(uint32_t ms)
-{
-	uint32_t ticks = 0;
-
-	ticks = ms + g_Ticks;
-
-	if (ticks > MAX_TICK) {
-		ticks = ticks - MAX_TICK;
-		while (g_Ticks < MAX_TICK);
-		while (g_Ticks == MAX_TICK || g_Ticks < ticks);
-	} else {
-		while (g_Ticks < ticks);
-	}
-}
+//void delayms(uint32_t ms)
+//{
+//	uint32_t ticks = 0;
+//
+//	ticks = ms + g_Ticks;
+//
+//	if (ticks > MAX_TICK) {
+//		ticks = ticks - MAX_TICK;
+//		while (g_Ticks < MAX_TICK);
+//		while (g_Ticks == MAX_TICK || g_Ticks < ticks);
+//	} else {
+//		while (g_Ticks < ticks);
+//	}
+//}
 
 void Delay_us(uint32_t us)
 {

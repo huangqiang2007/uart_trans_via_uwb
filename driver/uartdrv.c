@@ -6,11 +6,13 @@
 #include "em_usart.h"
 #include "em_gpio.h"
 #include "em_dma.h"
+#include "em_timer.h"
 #include "main.h"
 #include "uartdrv.h"
 #include "mainctrl.h"
 #include "string.h"
 #include "libdw1000.h"
+#include "timer.h"
 
 #define UART_FRAMR_QUEUE_LEN_10 10
 
@@ -104,6 +106,8 @@ void UART_DMAConfig(void);
 /*
  * uartSetup function
  */
+uint32_t USART0_BaudRate = 256000;
+
 void uartSetup(void)
 {
 	/*
@@ -121,7 +125,7 @@ void uartSetup(void)
 	 * */
 	uartInit.enable       = usartDisable;   /* Don't enable UART upon intialization */
 	uartInit.refFreq      = 0;              /* Provide information on reference frequency. When set to 0, the reference frequency is */
-	uartInit.baudrate     = 256000;//256000;         /* Baud rate *///115200 transfers to 148720
+	uartInit.baudrate     = USART0_BaudRate;//256000;         /* Baud rate *///115200 transfers to 148720
 	uartInit.oversampling = usartOVS16;     /* Oversampling. Range is 4x, 6x, 8x or 16x */
 	uartInit.databits     = usartDatabits8; /* Number of data bits. Range is 4 to 10 */
 	uartInit.parity       = usartNoParity; /* Parity mode */
@@ -139,10 +143,10 @@ void uartSetup(void)
 	 * Prepare UART Rx and Tx interrupts
 	 * */
 	USART_IntClear(uart, _USART_IFC_MASK);
-	//USART_IntEnable(uart, USART_IEN_RXDATAV);
+	USART_IntEnable(uart, USART_IEN_RXDATAV);
 	NVIC_ClearPendingIRQ(USART0_RX_IRQn);
 	NVIC_ClearPendingIRQ(USART0_TX_IRQn);
-	//NVIC_EnableIRQ(USART0_RX_IRQn);
+	NVIC_EnableIRQ(USART0_RX_IRQn);
 	NVIC_EnableIRQ(USART0_TX_IRQn);
 
 	/*
@@ -491,23 +495,40 @@ void UART_DMAConfig(void)
  * */
 void USART0_RX_IRQHandler(void)
 {
-	uint32_t flag = 0;
-
-	flag = USART_IntGet(uart);
-	USART_IntClear(uart, flag);
+//	uint32_t flag = 0;
+//
+//	flag = USART_IntGet(uart);
+//	USART_IntClear(uart, flag);
 
 	/* Check for RX data valid interrupt */
-	if (uart->IF & USART_IF_RXDATAV) {
-		/* Copy data into RX Buffer */
-		uint8_t rxData = USART_Rx(uart);
-		rxBuf.data[rxBuf.wrI] = rxData;
-		rxBuf.wrI             = (rxBuf.wrI + 1) % BUFFERSIZE;
-		rxBuf.pendingBytes++;
+//	if (uart->IF & USART_IF_RXDATAV) {
+//		/* Copy data into RX Buffer */
+//		uint8_t rxData = USART_Rx(uart);
+//		rxBuf.data[rxBuf.wrI] = rxData;
+//		rxBuf.wrI             = (rxBuf.wrI + 1) % BUFFERSIZE;
+//		rxBuf.pendingBytes++;
+//
+//		/* Flag Rx overflow */
+//		if (rxBuf.pendingBytes > BUFFERSIZE) {
+//			rxBuf.overflow = true;
+//		}
+//
+//
+//	}
 
-		/* Flag Rx overflow */
-		if (rxBuf.pendingBytes > BUFFERSIZE) {
-			rxBuf.overflow = true;
-		}
+	if(TIMER0_status == stop){
+		/* Set TIMER value */
+		TIMER_CounterSet(TIMER0, 0);
+		/* Enable TIMER */
+		TIMER_Enable(TIMER0, true);
+
+		TIMER0_status = run;
+	}
+	else{
+		/* Set TIMER value */
+		TIMER_CounterSet(TIMER0, 0);
+
+
 	}
 }
 

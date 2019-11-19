@@ -24,6 +24,8 @@ extern uint32_t uartReadChar(uint8_t *data);
 extern int UartFrameEnqueue(UartFrame *uFrame);
 extern UartFrame* UartFrameDequeue(void);
 
+extern uint32_t USART0_BaudRate;
+
 void DMAInit(void);
 //void DMAConfig(void);
 
