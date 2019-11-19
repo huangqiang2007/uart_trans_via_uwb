@@ -518,16 +518,18 @@ void USART0_RX_IRQHandler(void)
 
 	if(TIMER0_status == stop){
 		/* Set TIMER value */
-		TIMER_CounterSet(TIMER0, 0);
+//		TIMER_CounterSet(TIMER0, 0);
+		TIMER0->CNT = 0;
 		/* Enable TIMER */
-		TIMER_Enable(TIMER0, true);
+//		TIMER_Enable(TIMER0, true);
+		TIMER0->CMD = TIMER_CMD_START;
 
 		TIMER0_status = run;
 	}
 	else{
 		/* Set TIMER value */
-		TIMER_CounterSet(TIMER0, 0);
-
+//		TIMER_CounterSet(TIMER0, 0);
+		TIMER0->CNT = 0;
 
 	}
 }
