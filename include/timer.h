@@ -61,6 +61,13 @@ typedef enum
 	stop
 }TIMER_STATUS;
 
+typedef enum
+{
+	TIMER_DMA_REQ,
+	TIMER_DMA_NOREQ
+}TIMER_DMA_Req;
+
 extern TIMER_STATUS TIMER0_status;
+extern TIMER_DMA_Req TIMER0_DMA_Req;
 
 #endif /* INLCUDE_TIMER_H_ */

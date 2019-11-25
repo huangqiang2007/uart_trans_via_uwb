@@ -42,6 +42,7 @@ void TIMER0_IRQHandler(void)
 	/*
 	 * set DMA_CHANNEL interrupt flag
 	 * */
+	TIMER0_DMA_Req = TIMER_DMA_REQ;
 	DMA_IntSet(1<<DMA_CHANNEL);
 }
 
@@ -59,6 +60,7 @@ void TIMER1_IRQHandler(void)
 #define USART0RX_TIMEOUT_NUM 200
 uint32_t timer0_top_num = 695;
 TIMER_STATUS TIMER0_status = stop;
+TIMER_DMA_Req TIMER0_DMA_Req = TIMER_DMA_NOREQ;
 
 void setupTimer0(void)
 {

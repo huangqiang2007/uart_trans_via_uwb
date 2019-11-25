@@ -405,17 +405,38 @@ uint32_t uartGetData(uint8_t * dataPtr, uint32_t dataLen)
 SL_ALIGN(DMACTRL_ALIGNMENT)
 DMA_DESCRIPTOR_TypeDef dmaControlBlock1[DMACTRL_CH_CNT * 2] SL_ATTRIBUTE_ALIGN(DMACTRL_ALIGNMENT);
 
-#define CMD_LEN 22
+#define CMD_LEN 125
 uint8_t g_primaryResultBuffer[CMD_LEN] = {0}, g_alterResultBuffer[CMD_LEN] = {0};
 DMA_CB_TypeDef dma_uart_cb;
 
 void UART_DMA_callback(unsigned int channel, bool primary, void *user)
 {
-	if (primary == true)
-		dwSendData(&g_dwDev, g_primaryResultBuffer, CMD_LEN);
-	else
-		dwSendData(&g_dwDev, g_alterResultBuffer, CMD_LEN);
+	DMA_DESCRIPTOR_TypeDef *descr;
+	unsigned int nMinus1;
 
+	if (primary == true){
+		if( TIMER0_DMA_Req == TIMER_DMA_NOREQ ){
+			dwSendData(&g_dwDev, g_primaryResultBuffer, CMD_LEN);
+		}else{
+			TIMER0_DMA_Req = TIMER_DMA_NOREQ;
+			descr = ((DMA_DESCRIPTOR_TypeDef *)(DMA->CTRLBASE)) + channel;
+			nMinus1 =  (descr->CTRL & _DMA_CTRL_N_MINUS_1_MASK) >> _DMA_CTRL_N_MINUS_1_SHIFT;
+			nMinus1 = CMD_LEN - 1 - nMinus1;
+			if(nMinus1 != 0)
+				dwSendData(&g_dwDev, g_primaryResultBuffer, nMinus1);
+		}
+	}else{
+		if( TIMER0_DMA_Req == TIMER_DMA_NOREQ ){
+			dwSendData(&g_dwDev, g_alterResultBuffer, CMD_LEN);
+		}else{
+			TIMER0_DMA_Req = TIMER_DMA_NOREQ;
+			descr = ((DMA_DESCRIPTOR_TypeDef *)(DMA->ALTCTRLBASE)) + channel;
+			nMinus1 =  (descr->CTRL & _DMA_CTRL_N_MINUS_1_MASK) >> _DMA_CTRL_N_MINUS_1_SHIFT;
+			nMinus1 = CMD_LEN - 1 - nMinus1;
+			if(nMinus1 != 0)
+				dwSendData(&g_dwDev, g_alterResultBuffer, nMinus1);
+		}
+	}
 //	rxBuf.wrI = (rxBuf.wrI + CMD_LEN) % BUFFERSIZE;
 //	rxBuf.pendingBytes += CMD_LEN;
 
