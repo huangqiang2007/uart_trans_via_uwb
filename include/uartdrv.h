@@ -23,6 +23,7 @@ extern uint8_t uartGetChar(void);
 extern uint32_t uartReadChar(uint8_t *data);
 extern int UartFrameEnqueue(UartFrame *uFrame);
 extern UartFrame* UartFrameDequeue(void);
+void flushRxbuf(void);
 
 extern uint32_t USART0_BaudRate;
 

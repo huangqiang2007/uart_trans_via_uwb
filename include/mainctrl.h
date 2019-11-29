@@ -5,6 +5,28 @@
 #include <stdlib.h>
 #include "libdw1000Types.h"
 
+/*
+ * Declare a circular buffer structure to use for Rx and Tx queues
+ * */
+#define BUFFERSIZE 1000
+
+/*
+ * DMA transfer size(nMinus field)
+ * */
+#define CMD_LEN 125
+
+struct circularBuffer
+{
+  uint8_t  data[BUFFERSIZE];  /* data buffer */
+  uint32_t rdI;               /* read index */
+  uint32_t wrI;               /* write index */
+  uint32_t pendingBytes;      /* count of how many bytes are not yet handled */
+  bool     overflow;          /* buffer overflow indicator */
+};
+
+struct circularBuffer rxBuf, txBuf;
+
+extern volatile int32_t g_DMA_nMinus, g_DMA_nMinutemp, g_DMA_total_transfers;
 
 #define SLAVE_NUMS 4
 

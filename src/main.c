@@ -187,6 +187,7 @@ int main(void)
 	dwStartReceive(&g_dwDev);
 
 	while (1) {
+		flushRxbuf();
 //		switch(g_cur_mode)
 //		{
 //			case MAIN_WKUPMODE:

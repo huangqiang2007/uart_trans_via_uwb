@@ -84,20 +84,6 @@ out:
 	return uFrame;
 }
 
-/*
- * Declare a circular buffer structure to use for Rx and Tx queues
- * */
-#define BUFFERSIZE 220
-
-volatile static struct circularBuffer
-{
-  uint8_t  data[BUFFERSIZE];  /* data buffer */
-  uint32_t rdI;               /* read index */
-  uint32_t wrI;               /* write index */
-  uint32_t pendingBytes;      /* count of how many bytes are not yet handled */
-  bool     overflow;          /* buffer overflow indicator */
-} rxBuf, txBuf = { {0}, 0, 0, 0, false };
-
 /* Setup UART0 in async mode for RS232*/
 static USART_TypeDef *uart = USART0;
 static USART_InitAsync_TypeDef uartInit = USART_INITASYNC_DEFAULT;
@@ -144,9 +130,9 @@ void uartSetup(void)
 	 * */
 	USART_IntClear(uart, _USART_IFC_MASK);
 	USART_IntEnable(uart, USART_IEN_RXDATAV);
-	NVIC_ClearPendingIRQ(USART0_RX_IRQn);
+	//NVIC_ClearPendingIRQ(USART0_RX_IRQn);
 	NVIC_ClearPendingIRQ(USART0_TX_IRQn);
-	NVIC_EnableIRQ(USART0_RX_IRQn);
+	//NVIC_EnableIRQ(USART0_RX_IRQn);
 	NVIC_EnableIRQ(USART0_TX_IRQn);
 
 	/*
@@ -405,48 +391,64 @@ uint32_t uartGetData(uint8_t * dataPtr, uint32_t dataLen)
 SL_ALIGN(DMACTRL_ALIGNMENT)
 DMA_DESCRIPTOR_TypeDef dmaControlBlock1[DMACTRL_CH_CNT * 2] SL_ATTRIBUTE_ALIGN(DMACTRL_ALIGNMENT);
 
-#define CMD_LEN 125
-uint8_t g_primaryResultBuffer[CMD_LEN] = {0}, g_alterResultBuffer[CMD_LEN] = {0};
+//#define CMD_LEN 125
+uint8_t g_primaryResultBuffer[2] = {0}, g_alterResultBuffer[2] = {0};
 DMA_CB_TypeDef dma_uart_cb;
+#define DMA_BUFFER_NUMS 8
+
+void flushRxbuf(void)
+{
+	uint8_t temp_buf[CMD_LEN];
+
+	if (rxBuf.pendingBytes >= CMD_LEN) {
+		if (BUFFERSIZE - rxBuf.rdI < CMD_LEN) {
+			memcpy(temp_buf, &rxBuf.data[rxBuf.rdI], BUFFERSIZE - rxBuf.rdI);
+			memcpy(temp_buf + BUFFERSIZE - rxBuf.rdI, &rxBuf.data[0], CMD_LEN - (BUFFERSIZE - rxBuf.rdI));
+			dwSendData(&g_dwDev, temp_buf, CMD_LEN);
+			rxBuf.rdI = CMD_LEN - (BUFFERSIZE - rxBuf.rdI);
+		} else {
+			dwSendData(&g_dwDev, &rxBuf.data[rxBuf.rdI], CMD_LEN);
+			rxBuf.rdI = (rxBuf.rdI + CMD_LEN) % BUFFERSIZE;
+		}
+
+		rxBuf.pendingBytes -= CMD_LEN;
+	} else {
+		if (rxBuf.wrI < rxBuf.rdI) {
+			memcpy(temp_buf, &rxBuf.data[rxBuf.rdI], BUFFERSIZE - rxBuf.rdI);
+			memcpy(temp_buf + BUFFERSIZE - rxBuf.rdI, &rxBuf.data[0], rxBuf.wrI);
+			dwSendData(&g_dwDev, temp_buf, rxBuf.pendingBytes);
+		} else {
+			dwSendData(&g_dwDev, &rxBuf.data[rxBuf.rdI], rxBuf.pendingBytes);
+		}
+
+		rxBuf.rdI = rxBuf.wrI;
+		rxBuf.pendingBytes = 0;
+	}
+}
 
 void UART_DMA_callback(unsigned int channel, bool primary, void *user)
 {
-	DMA_DESCRIPTOR_TypeDef *descr;
-	unsigned int nMinus1;
+	CORE_CriticalDisableIrq();
+	if (g_DMA_total_transfers > 0) {
+		rxBuf.wrI = (rxBuf.wrI + CMD_LEN - g_DMA_total_transfers) % BUFFERSIZE;
+		rxBuf.pendingBytes += CMD_LEN - g_DMA_total_transfers;
 
-	if (primary == true){
-		if( TIMER0_DMA_Req == TIMER_DMA_NOREQ ){
-			dwSendData(&g_dwDev, g_primaryResultBuffer, CMD_LEN);
-		}else{
-			TIMER0_DMA_Req = TIMER_DMA_NOREQ;
-			descr = ((DMA_DESCRIPTOR_TypeDef *)(DMA->CTRLBASE)) + channel;
-			nMinus1 =  (descr->CTRL & _DMA_CTRL_N_MINUS_1_MASK) >> _DMA_CTRL_N_MINUS_1_SHIFT;
-			nMinus1 = CMD_LEN - 1 - nMinus1;
-			if(nMinus1 != 0)
-				dwSendData(&g_dwDev, g_primaryResultBuffer, nMinus1);
-		}
-	}else{
-		if( TIMER0_DMA_Req == TIMER_DMA_NOREQ ){
-			dwSendData(&g_dwDev, g_alterResultBuffer, CMD_LEN);
-		}else{
-			TIMER0_DMA_Req = TIMER_DMA_NOREQ;
-			descr = ((DMA_DESCRIPTOR_TypeDef *)(DMA->ALTCTRLBASE)) + channel;
-			nMinus1 =  (descr->CTRL & _DMA_CTRL_N_MINUS_1_MASK) >> _DMA_CTRL_N_MINUS_1_SHIFT;
-			nMinus1 = CMD_LEN - 1 - nMinus1;
-			if(nMinus1 != 0)
-				dwSendData(&g_dwDev, g_alterResultBuffer, nMinus1);
-		}
+		g_DMA_nMinus = 0,
+		g_DMA_nMinutemp = 0,
+		g_DMA_total_transfers = 0;
+	} else {
+		rxBuf.wrI = (rxBuf.wrI + CMD_LEN) % BUFFERSIZE;
+		rxBuf.pendingBytes += CMD_LEN;
 	}
-//	rxBuf.wrI = (rxBuf.wrI + CMD_LEN) % BUFFERSIZE;
-//	rxBuf.pendingBytes += CMD_LEN;
+	CORE_CriticalEnableIrq();
 
 	/* Re-activate the DMA */
 	DMA_RefreshPingPong(
 		channel,
 		primary,
 		false,
-		NULL,
-		NULL,
+		(void *)&USART0->RXDATA,
+		(void *)&rxBuf.data[rxBuf.wrI],
 		CMD_LEN - 1,
 		false);
 
