@@ -115,8 +115,8 @@ void spiDMA_test(dwDevice_t *dev)
 		dwSpiRead(dev, 0x04, 0x00, buf, 4);
 	}
 }
-int main(void)
 
+int main(void)
 {
 	/*
 	 * Chip errata
