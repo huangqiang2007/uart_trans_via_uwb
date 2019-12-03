@@ -46,7 +46,7 @@ void TIMER0_IRQHandler(void)
 	 * rxBuf's rxBuf->wrI pointer timely.
 	 * */
 	DMA_nMinus = (descr->CTRL & _DMA_CTRL_N_MINUS_1_MASK) >> _DMA_CTRL_N_MINUS_1_SHIFT;
-	if (DMA_nMinus_check_times++ > 3 && g_DMA_nMinutemp == DMA_nMinus) {
+	if (DMA_nMinus_check_times++ > 3) {
 		int8_t temp = 0;
 
 		CORE_CriticalDisableIrq();
@@ -57,7 +57,10 @@ void TIMER0_IRQHandler(void)
 		g_DMA_nMinus = g_DMA_nMinutemp;
 		CORE_CriticalEnableIrq();
 	} else {
-		g_DMA_nMinutemp = DMA_nMinus;
+		if (g_DMA_nMinutemp != DMA_nMinus) {
+			g_DMA_nMinutemp = DMA_nMinus;
+			DMA_nMinus_check_times = 0;
+		}
 	}
 
 #if 0

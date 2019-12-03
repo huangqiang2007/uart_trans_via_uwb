@@ -433,7 +433,7 @@ void UART_DMA_callback(unsigned int channel, bool primary, void *user)
 		rxBuf.wrI = (rxBuf.wrI + CMD_LEN - g_DMA_total_transfers) % BUFFERSIZE;
 		rxBuf.pendingBytes += CMD_LEN - g_DMA_total_transfers;
 
-		g_DMA_nMinus = 0,
+		g_DMA_nMinus = CMD_LEN,
 		g_DMA_nMinutemp = 0,
 		g_DMA_total_transfers = 0;
 	} else {

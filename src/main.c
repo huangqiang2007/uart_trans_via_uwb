@@ -162,12 +162,6 @@ int main(void)
 	//spiDMA_test(&g_dwDev);
 
 	/*
-	 * config one DMA channel for transferring ADC sample results
-	 * to specific RAM buffer.
-	 * */
-//	DMAConfig();
-
-	/*
 	 * DW100 wireless device init
 	 * */
 	GPIO_PinModeSet(gpioPortC, 13, gpioModePushPull, 1);
@@ -188,31 +182,34 @@ int main(void)
 
 	while (1) {
 		flushRxbuf();
-//		switch(g_cur_mode)
-//		{
-//			case MAIN_WKUPMODE:
-//				WakeupSlave(&g_dwDev);
-//				break;
-//
-//			case MAIN_SAMPLEMODE:
-//				RecvFromSlave(&g_dwDev);
-//				break;
-//
-//			case MAIN_IDLEMODE:
-//				if (!pollSleepCMD(&g_dwDev) < 0)
-//					g_cur_mode = MAIN_WKUPMODE;
-//				break;
-//
-//			case MAIN_SLEEPMODE:
-//				g_cur_mode = MAIN_SLEEPMODE;
-//				break;
-//
-//			default:
-//				g_cur_mode = MAIN_WKUPMODE;
-//				break;
-//		}
+
+#if 0
+		switch(g_cur_mode)
+		{
+			case MAIN_WKUPMODE:
+				WakeupSlave(&g_dwDev);
+				break;
+
+			case MAIN_SAMPLEMODE:
+				RecvFromSlave(&g_dwDev);
+				break;
+
+			case MAIN_IDLEMODE:
+				if (!pollSleepCMD(&g_dwDev) < 0)
+					g_cur_mode = MAIN_WKUPMODE;
+				break;
+
+			case MAIN_SLEEPMODE:
+				g_cur_mode = MAIN_SLEEPMODE;
+				break;
+
+			default:
+				g_cur_mode = MAIN_WKUPMODE;
+				break;
+		}
 
 		Delay_ms(1);
+#endif
 	}
 }
 #endif
