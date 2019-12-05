@@ -111,7 +111,7 @@ void uartSetup(void)
 	 * */
 	uartInit.enable       = usartDisable;   /* Don't enable UART upon intialization */
 	uartInit.refFreq      = 0;              /* Provide information on reference frequency. When set to 0, the reference frequency is */
-	uartInit.baudrate     = USART0_BaudRate;//256000;         /* Baud rate *///115200 transfers to 148720
+	uartInit.baudrate     = 921600;         /* Baud rate *///115200 transfers to 148720
 	uartInit.oversampling = usartOVS16;     /* Oversampling. Range is 4x, 6x, 8x or 16x */
 	uartInit.databits     = usartDatabits8; /* Number of data bits. Range is 4 to 10 */
 	uartInit.parity       = usartNoParity; /* Parity mode */
@@ -129,8 +129,9 @@ void uartSetup(void)
 	 * Prepare UART Rx and Tx interrupts
 	 * */
 	USART_IntClear(uart, _USART_IFC_MASK);
-	USART_IntEnable(uart, USART_IEN_RXDATAV);
-	//NVIC_ClearPendingIRQ(USART0_RX_IRQn);
+	//USART_IntEnable(uart, USART_IEN_RXDATAV);
+	//USART_IntEnable(uart, USART_IEN_TXBL);
+	NVIC_ClearPendingIRQ(USART0_RX_IRQn);
 	NVIC_ClearPendingIRQ(USART0_TX_IRQn);
 	//NVIC_EnableIRQ(USART0_RX_IRQn);
 	NVIC_EnableIRQ(USART0_TX_IRQn);
@@ -428,6 +429,7 @@ void flushRxbuf(void)
 
 void UART_DMA_callback(unsigned int channel, bool primary, void *user)
 {
+#if 1
 	CORE_CriticalDisableIrq();
 	if (g_DMA_total_transfers > 0) {
 		rxBuf.wrI = (rxBuf.wrI + CMD_LEN - g_DMA_total_transfers) % BUFFERSIZE;
@@ -437,18 +439,19 @@ void UART_DMA_callback(unsigned int channel, bool primary, void *user)
 		g_DMA_nMinutemp = 0,
 		g_DMA_total_transfers = 0;
 	} else {
+		//uartPutData(&rxBuf.data[rxBuf.wrI], CMD_LEN);
 		rxBuf.wrI = (rxBuf.wrI + CMD_LEN) % BUFFERSIZE;
 		rxBuf.pendingBytes += CMD_LEN;
 	}
 	CORE_CriticalEnableIrq();
-
+#endif
 	/* Re-activate the DMA */
 	DMA_RefreshPingPong(
 		channel,
 		primary,
 		false,
-		(void *)&USART0->RXDATA,
 		(void *)&rxBuf.data[rxBuf.wrI],
+		(void *)&USART0->RXDATA,
 		CMD_LEN - 1,
 		false);
 
@@ -501,11 +504,11 @@ void UART_DMAConfig(void)
 	DMA_ActivatePingPong(
 		DMA_CHANNEL,
 		false,
-		(void *)&g_primaryResultBuffer, // primary destination
+		(void *)&rxBuf.data[rxBuf.wrI], // primary destination
 		(void *)&(USART0->RXDATA), // primary source
 		CMD_LEN - 1,
-		(void *)&g_alterResultBuffer, // alternate destination
-		(void *)&(USART0->RXDATA), // alternate source
+		(void *)&rxBuf.data[rxBuf.wrI + CMD_LEN], // alternate destination
+		(void *)&USART0->RXDATA, // alternate source
 		CMD_LEN - 1);
 }
 
@@ -564,6 +567,7 @@ void USART0_RX_IRQHandler(void)
  * */
 void USART0_TX_IRQHandler(void)
 {
+#if 1
 	/* Check TX buffer level status */
 	if (uart->IF & USART_IF_TXBL) {
 		if (txBuf.pendingBytes > 0) {
@@ -578,4 +582,19 @@ void USART0_TX_IRQHandler(void)
 			USART_IntDisable(uart, USART_IEN_TXBL);
 		}
 	}
+#else
+	if (uart->IF & USART_IF_TXBL) {
+		if (rxBuf.pendingBytes > 0) {
+			/* Transmit pending character */
+			USART_Tx(uart, rxBuf.data[rxBuf.rdI]);
+			rxBuf.rdI = (rxBuf.rdI + 1) % BUFFERSIZE;
+			rxBuf.pendingBytes--;
+		}
+
+		/* Disable Tx interrupt if no more bytes in queue */
+		if (rxBuf.pendingBytes == 0) {
+			USART_IntDisable(uart, USART_IEN_TXBL);
+		}
+	}
+#endif
 }

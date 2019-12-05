@@ -27,6 +27,8 @@ void globalInit(void)
 	g_dataRecvDone = false;
 //	g_slaveWkup = false;
 //	g_cur_mode = MAIN_IDLEMODE;
+	memset((void *)&rxBuf, 0x00, sizeof(rxBuf));
+	memset((void *)&txBuf, 0x00, sizeof(txBuf));
 }
 
 void powerADandUWB(uint8_t master)

@@ -41,12 +41,13 @@ void TIMER0_IRQHandler(void)
 	if (g_Ticks > 0xFFFFFFF0 - WAKUP_DURATION)
 		g_Ticks = 0;
 
+#if 1
 	/*
 	 * if DMA nMinus field doesn't change at all during specific time scope, we update
 	 * rxBuf's rxBuf->wrI pointer timely.
 	 * */
 	DMA_nMinus = (descr->CTRL & _DMA_CTRL_N_MINUS_1_MASK) >> _DMA_CTRL_N_MINUS_1_SHIFT;
-	if (DMA_nMinus_check_times++ > 3) {
+	if (DMA_nMinus_check_times++ > 1000) {
 		int8_t temp = 0;
 
 		CORE_CriticalDisableIrq();
@@ -57,11 +58,17 @@ void TIMER0_IRQHandler(void)
 		g_DMA_nMinus = g_DMA_nMinutemp;
 		CORE_CriticalEnableIrq();
 	} else {
+		if (DMA_nMinus == 0) {
+			DMA_nMinus_check_times = 0;
+		}
+
 		if (g_DMA_nMinutemp != DMA_nMinus) {
 			g_DMA_nMinutemp = DMA_nMinus;
 			DMA_nMinus_check_times = 0;
+			//uartPutData("test\n", 5);
 		}
 	}
+#endif
 
 #if 0
 	/* Disable TIMER */
@@ -101,7 +108,7 @@ void setupTimer0(void)
 	/* Select TIMER0 parameters */
 	TIMER_Init_TypeDef timerInit =
 	{
-		.enable     = false,
+		.enable     = true,
 		.debugRun   = true,
 		.prescale   = timerPrescale8,
 		.clkSel     = timerClkSelHFPerClk,
