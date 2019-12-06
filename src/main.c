@@ -116,6 +116,23 @@ void spiDMA_test(dwDevice_t *dev)
 	}
 }
 
+extern volatile uint32_t g_Ticks;
+
+void uwb_send_and_recv_test(void)
+{
+	uint8_t temp[4] = {0};
+
+	g_cmd_feedback_timeout = g_Ticks + CMD_FEEDBACK_TIMEOUT;
+	dwSendData(&g_dwDev, "test\n", 5);
+	delayms(20);
+	dwNewReceive(&g_dwDev);
+	dwStartReceive(&g_dwDev);
+
+	while (!g_dataRecvDone && g_cmd_feedback_timeout > g_Ticks);
+	g_dataRecvDone = false;
+	memcpy(temp, (void *)&g_recvSlaveFr, 4);
+}
+
 int main(void)
 {
 	/*
@@ -177,11 +194,14 @@ int main(void)
   	UDELAY_Calibrate();
   	Delay_ms(500);
 
-	dwNewReceive(&g_dwDev);
-	dwStartReceive(&g_dwDev);
+	//dwNewReceive(&g_dwDev);
+	//dwStartReceive(&g_dwDev);
 
 	while (1) {
 		flushRxbuf();
+
+		//uwb_send_and_recv_test();
+
 
 #if 0
 		switch(g_cur_mode)

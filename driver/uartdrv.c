@@ -397,6 +397,8 @@ uint8_t g_primaryResultBuffer[2] = {0}, g_alterResultBuffer[2] = {0};
 DMA_CB_TypeDef dma_uart_cb;
 #define DMA_BUFFER_NUMS 8
 
+#define UWB_SEND_SWITCH 0
+
 void flushRxbuf(void)
 {
 	uint8_t temp_buf[CMD_LEN];
@@ -405,25 +407,39 @@ void flushRxbuf(void)
 		if (BUFFERSIZE - rxBuf.rdI < CMD_LEN) {
 			memcpy(temp_buf, &rxBuf.data[rxBuf.rdI], BUFFERSIZE - rxBuf.rdI);
 			memcpy(temp_buf + BUFFERSIZE - rxBuf.rdI, &rxBuf.data[0], CMD_LEN - (BUFFERSIZE - rxBuf.rdI));
+#if UWB_SEND_SWITCH
 			dwSendData(&g_dwDev, temp_buf, CMD_LEN);
+#endif
+			uartPutData(&temp_buf, CMD_LEN);
 			rxBuf.rdI = CMD_LEN - (BUFFERSIZE - rxBuf.rdI);
 		} else {
+#if UWB_SEND_SWITCH
 			dwSendData(&g_dwDev, &rxBuf.data[rxBuf.rdI], CMD_LEN);
+#endif
+			uartPutData(&rxBuf.data[rxBuf.rdI], CMD_LEN);
 			rxBuf.rdI = (rxBuf.rdI + CMD_LEN) % BUFFERSIZE;
 		}
 
+		CORE_CriticalDisableIrq();
 		rxBuf.pendingBytes -= CMD_LEN;
+		CORE_CriticalEnableIrq();
 	} else {
 		if (rxBuf.wrI < rxBuf.rdI) {
 			memcpy(temp_buf, &rxBuf.data[rxBuf.rdI], BUFFERSIZE - rxBuf.rdI);
 			memcpy(temp_buf + BUFFERSIZE - rxBuf.rdI, &rxBuf.data[0], rxBuf.wrI);
+#if UWB_SEND_SWITCH
 			dwSendData(&g_dwDev, temp_buf, rxBuf.pendingBytes);
+#endif
+			uartPutData(&temp_buf, rxBuf.pendingBytes);
 		} else {
-			dwSendData(&g_dwDev, &rxBuf.data[rxBuf.rdI], rxBuf.pendingBytes);
+			//dwSendData(&g_dwDev, &rxBuf.data[rxBuf.rdI], rxBuf.pendingBytes);
 		}
 
 		rxBuf.rdI = rxBuf.wrI;
+
+		CORE_CriticalDisableIrq();
 		rxBuf.pendingBytes = 0;
+		CORE_CriticalEnableIrq();
 	}
 }
 
@@ -432,6 +448,7 @@ void UART_DMA_callback(unsigned int channel, bool primary, void *user)
 #if 1
 	CORE_CriticalDisableIrq();
 	if (g_DMA_total_transfers > 0) {
+		//uartPutData(&rxBuf.data[rxBuf.wrI], CMD_LEN - g_DMA_total_transfers);
 		rxBuf.wrI = (rxBuf.wrI + CMD_LEN - g_DMA_total_transfers) % BUFFERSIZE;
 		rxBuf.pendingBytes += CMD_LEN - g_DMA_total_transfers;
 

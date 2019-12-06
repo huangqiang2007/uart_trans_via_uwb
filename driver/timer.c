@@ -57,6 +57,7 @@ void TIMER0_IRQHandler(void)
 		rxBuf.pendingBytes += temp;
 		g_DMA_nMinus = g_DMA_nMinutemp;
 		CORE_CriticalEnableIrq();
+		//uartPutData("tt\n", 3);
 	} else {
 		if (DMA_nMinus == 0) {
 			DMA_nMinus_check_times = 0;
@@ -65,7 +66,7 @@ void TIMER0_IRQHandler(void)
 		if (g_DMA_nMinutemp != DMA_nMinus) {
 			g_DMA_nMinutemp = DMA_nMinus;
 			DMA_nMinus_check_times = 0;
-			//uartPutData("test\n", 5);
+			//uartPutData("ss\n", 3);
 		}
 	}
 #endif
