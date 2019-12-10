@@ -31,7 +31,7 @@ volatile uint32_t tx_finish_times = 0;
  *****************************************************************************/
 void TIMER0_IRQHandler(void)
 {
-	static int8_t DMA_nMinus_check_times = 0;
+	static int16_t DMA_nMinus_check_times = 0;
 	uint32_t DMA_nMinus = 0;
 	DMA_DESCRIPTOR_TypeDef *descr = (DMA_DESCRIPTOR_TypeDef *)DMA->CTRLBASE + DMA_CHANNEL;
 
@@ -47,7 +47,7 @@ void TIMER0_IRQHandler(void)
 	 * rxBuf's rxBuf->wrI pointer timely.
 	 * */
 	DMA_nMinus = (descr->CTRL & _DMA_CTRL_N_MINUS_1_MASK) >> _DMA_CTRL_N_MINUS_1_SHIFT;
-	if (DMA_nMinus_check_times++ > 1000) {
+	if (DMA_nMinus_check_times++ > 10000) {
 		int8_t temp = 0;
 
 		CORE_CriticalDisableIrq();
@@ -57,6 +57,8 @@ void TIMER0_IRQHandler(void)
 		rxBuf.pendingBytes += temp;
 		g_DMA_nMinus = g_DMA_nMinutemp;
 		CORE_CriticalEnableIrq();
+
+		DMA_nMinus_check_times = 0;
 		//uartPutData("tt\n", 3);
 	} else {
 		if (DMA_nMinus == 0) {

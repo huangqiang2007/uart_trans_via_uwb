@@ -14,6 +14,7 @@
 #include "Typedefs.h"
 #include "libdw1000.h"
 #include "em_dma.h"
+#include "em_timer.h"
 
 //extern volatile int8_t g_slaveWkup;
 
@@ -133,6 +134,54 @@ void uwb_send_and_recv_test(void)
 	memcpy(temp, (void *)&g_recvSlaveFr, 4);
 }
 
+volatile int g_send_cnt = 0, g_recv_cnt = 0, g_cnt2 = 0;
+
+void uwb_send_and_try_resend(uint8_t *data, int len)
+{
+	uint8_t temp[4] = {0}, timeout = 0;
+
+//	uint32_t cnt1 = 0, cnt2 = 0;
+//
+//	TIMER_CounterSet(TIMER1, 0);
+//	TIMER_TopSet(TIMER1, 3125 * 10);
+//	TIMER_Enable(TIMER1, true);
+//
+//	cnt1 = TIMER_CounterGet(TIMER1);
+
+	g_send_cnt++;
+	dwSendData(&g_dwDev, data, len);
+	delayms(1);
+	dwNewReceive(&g_dwDev);
+	dwStartReceive(&g_dwDev);
+
+	while (!g_dataRecvDone) {
+		delayms(1);
+		if (timeout++ > 2)
+			break;
+	}
+	g_dataRecvDone = false;
+	memcpy(temp, (void *)&g_recvSlaveFr, 4);
+
+//	cnt2 = TIMER_CounterGet(TIMER1);
+//	TIMER_Enable(TIMER1, false);
+//	g_cnt2 = cnt2 - cnt1;
+}
+
+void fill_rxbuf(struct circularBuffer *rxBuf)
+{
+	int8_t i = 0, j = 0;
+
+	for (i = 0; i < 40; i++)
+		for (j = 0; j < 25; j++) {
+			if (j == 24)
+				rxBuf->data[25 * i + j] = '\n';
+			else
+				rxBuf->data[25 * i + j] = j;
+		}
+
+	rxBuf->pendingBytes = BUFFERSIZE;
+}
+
 int main(void)
 {
 	/*
@@ -197,8 +246,11 @@ int main(void)
 	//dwNewReceive(&g_dwDev);
 	//dwStartReceive(&g_dwDev);
 
+	//fill_rxbuf(&rxBuf);
+
 	while (1) {
 		flushRxbuf();
+		//rxBuf.pendingBytes = BUFFERSIZE;
 
 		//uwb_send_and_recv_test();
 

@@ -92,7 +92,7 @@ void UART_DMAConfig(void);
 /*
  * uartSetup function
  */
-uint32_t USART0_BaudRate = 256000;
+uint32_t USART0_BaudRate = 115200;
 
 void uartSetup(void)
 {
@@ -111,7 +111,7 @@ void uartSetup(void)
 	 * */
 	uartInit.enable       = usartDisable;   /* Don't enable UART upon intialization */
 	uartInit.refFreq      = 0;              /* Provide information on reference frequency. When set to 0, the reference frequency is */
-	uartInit.baudrate     = 921600;         /* Baud rate *///115200 transfers to 148720
+	uartInit.baudrate     = USART0_BaudRate;         /* Baud rate *///115200 transfers to 148720
 	uartInit.oversampling = usartOVS16;     /* Oversampling. Range is 4x, 6x, 8x or 16x */
 	uartInit.databits     = usartDatabits8; /* Number of data bits. Range is 4 to 10 */
 	uartInit.parity       = usartNoParity; /* Parity mode */
@@ -134,7 +134,7 @@ void uartSetup(void)
 	NVIC_ClearPendingIRQ(USART0_RX_IRQn);
 	NVIC_ClearPendingIRQ(USART0_TX_IRQn);
 	//NVIC_EnableIRQ(USART0_RX_IRQn);
-	NVIC_EnableIRQ(USART0_TX_IRQn);
+	//NVIC_EnableIRQ(USART0_TX_IRQn);
 
 	/*
 	 * Enable I/O pins at UART1 location #2
@@ -149,7 +149,7 @@ void uartSetup(void)
 	/*
 	 * Enable UART
 	 * */
-	USART_Enable(uart, usartEnable);
+	USART_Enable(uart, usartEnableRx);
 }
 
 
@@ -397,63 +397,111 @@ uint8_t g_primaryResultBuffer[2] = {0}, g_alterResultBuffer[2] = {0};
 DMA_CB_TypeDef dma_uart_cb;
 #define DMA_BUFFER_NUMS 8
 
-#define UWB_SEND_SWITCH 0
+#define UWB_SEND_SWITCH 1
 
+extern int g_cnt2;
 void flushRxbuf(void)
 {
 	uint8_t temp_buf[CMD_LEN];
+	uint32_t cnt1 = 0, cnt2 = 0, pendbytes = 0, remainbytes = 0;
 
-	if (rxBuf.pendingBytes >= CMD_LEN) {
-		if (BUFFERSIZE - rxBuf.rdI < CMD_LEN) {
-			memcpy(temp_buf, &rxBuf.data[rxBuf.rdI], BUFFERSIZE - rxBuf.rdI);
-			memcpy(temp_buf + BUFFERSIZE - rxBuf.rdI, &rxBuf.data[0], CMD_LEN - (BUFFERSIZE - rxBuf.rdI));
-#if UWB_SEND_SWITCH
-			dwSendData(&g_dwDev, temp_buf, CMD_LEN);
-#endif
-			uartPutData(&temp_buf, CMD_LEN);
-			rxBuf.rdI = CMD_LEN - (BUFFERSIZE - rxBuf.rdI);
-		} else {
-#if UWB_SEND_SWITCH
-			dwSendData(&g_dwDev, &rxBuf.data[rxBuf.rdI], CMD_LEN);
-#endif
-			uartPutData(&rxBuf.data[rxBuf.rdI], CMD_LEN);
-			rxBuf.rdI = (rxBuf.rdI + CMD_LEN) % BUFFERSIZE;
-		}
+	TIMER_CounterSet(TIMER1, 0);
+	TIMER_TopSet(TIMER1, 3125 * 10);
+	TIMER_Enable(TIMER1, true);
 
+	cnt1 = TIMER_CounterGet(TIMER1);
+
+	CORE_CriticalDisableIrq();
+	pendbytes = (rxBuf.rdI + BUFFERSIZE - rxBuf.wrI) % BUFFERSIZE;
+	CORE_CriticalEnableIrq();
+
+	if (pendbytes >= CMD_LEN) {
 		CORE_CriticalDisableIrq();
 		rxBuf.pendingBytes -= CMD_LEN;
+		remainbytes = BUFFERSIZE - rxBuf.rdI;
 		CORE_CriticalEnableIrq();
-	} else {
-		if (rxBuf.wrI < rxBuf.rdI) {
-			memcpy(temp_buf, &rxBuf.data[rxBuf.rdI], BUFFERSIZE - rxBuf.rdI);
-			memcpy(temp_buf + BUFFERSIZE - rxBuf.rdI, &rxBuf.data[0], rxBuf.wrI);
+		if (remainbytes < CMD_LEN) {
+			memcpy(temp_buf, &rxBuf.data[rxBuf.rdI], remainbytes);
+			memcpy(temp_buf + remainbytes, &rxBuf.data[0], CMD_LEN - remainbytes);
 #if UWB_SEND_SWITCH
-			dwSendData(&g_dwDev, temp_buf, rxBuf.pendingBytes);
+			//dwSendData(&g_dwDev, temp_buf, CMD_LEN);
+			uwb_send_and_try_resend(temp_buf, CMD_LEN);
+#else
+			uartPutData(&temp_buf, CMD_LEN);
 #endif
-			uartPutData(&temp_buf, rxBuf.pendingBytes);
+			rxBuf.rdI = CMD_LEN - remainbytes;
 		} else {
-			//dwSendData(&g_dwDev, &rxBuf.data[rxBuf.rdI], rxBuf.pendingBytes);
+#if UWB_SEND_SWITCH
+			//dwSendData(&g_dwDev, &rxBuf.data[rxBuf.rdI], CMD_LEN);
+			uwb_send_and_try_resend(&rxBuf.data[rxBuf.rdI], CMD_LEN);
+#else
+			uartPutData(&rxBuf.data[rxBuf.rdI], CMD_LEN);
+#endif
+			rxBuf.rdI = (rxBuf.rdI + CMD_LEN) % BUFFERSIZE;
+
+			cnt2 = TIMER_CounterGet(TIMER1);
+			TIMER_Enable(TIMER1, false);
+			g_cnt2 = cnt2 - cnt1;
 		}
 
-		rxBuf.rdI = rxBuf.wrI;
+//		CORE_CriticalDisableIrq();
+//		rxBuf.pendingBytes -= CMD_LEN;
+//		CORE_CriticalEnableIrq();
+	} else {
+		int16_t temp = 0, wri_cnt = 0;
 
+		/*
+		 * firstly get the bufferred bytes count, in case 'rxBuf.pendingBytes'
+		 * is updated in DMA interrupt concurrently.
+		 * */
 		CORE_CriticalDisableIrq();
+		temp = rxBuf.pendingBytes;
 		rxBuf.pendingBytes = 0;
+		wri_cnt = rxBuf.wrI;
 		CORE_CriticalEnableIrq();
+
+		if ((temp < CMD_LEN) && (wri_cnt < rxBuf.rdI) && (BUFFERSIZE - rxBuf.rdI < temp)) {
+			memcpy(temp_buf, &rxBuf.data[rxBuf.rdI], BUFFERSIZE - rxBuf.rdI);
+			memcpy(temp_buf + BUFFERSIZE - rxBuf.rdI, &rxBuf.data[0], wri_cnt);
+
+#if UWB_SEND_SWITCH
+			//dwSendData(&g_dwDev, temp_buf, temp);
+			uwb_send_and_try_resend(temp_buf, temp);
+#else
+			uartPutData(&temp_buf, temp);
+#endif
+			CORE_CriticalDisableIrq();
+			rxBuf.pendingBytes = 0;
+			rxBuf.rdI = rxBuf.wrI = 0;
+			CORE_CriticalEnableIrq();
+		} else {
+			//dwSendData(&g_dwDev, temp_buf, temp);
+			//uwb_send_and_try_resend(&rxBuf.data[rxBuf.rdI], temp);
+		}
+
+//		rxBuf.rdI = rxBuf.wrI;
+//
+//		CORE_CriticalDisableIrq();
+//		rxBuf.pendingBytes = 0;
+//		CORE_CriticalEnableIrq();
 	}
 }
 
+extern volatile int g_recv_cnt;
 void UART_DMA_callback(unsigned int channel, bool primary, void *user)
 {
-#if 1
+	while (rxBuf.pendingBytes == BUFFERSIZE);
+
+	g_recv_cnt++;
+
 	CORE_CriticalDisableIrq();
 	if (g_DMA_total_transfers > 0) {
 		//uartPutData(&rxBuf.data[rxBuf.wrI], CMD_LEN - g_DMA_total_transfers);
 		rxBuf.wrI = (rxBuf.wrI + CMD_LEN - g_DMA_total_transfers) % BUFFERSIZE;
 		rxBuf.pendingBytes += CMD_LEN - g_DMA_total_transfers;
 
-		g_DMA_nMinus = CMD_LEN,
-		g_DMA_nMinutemp = 0,
+		g_DMA_nMinus = CMD_LEN;
+		g_DMA_nMinutemp = 0;
 		g_DMA_total_transfers = 0;
 	} else {
 		//uartPutData(&rxBuf.data[rxBuf.wrI], CMD_LEN);
@@ -461,7 +509,7 @@ void UART_DMA_callback(unsigned int channel, bool primary, void *user)
 		rxBuf.pendingBytes += CMD_LEN;
 	}
 	CORE_CriticalEnableIrq();
-#endif
+
 	/* Re-activate the DMA */
 	DMA_RefreshPingPong(
 		channel,
