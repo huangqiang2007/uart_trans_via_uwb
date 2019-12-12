@@ -47,15 +47,17 @@ void TIMER0_IRQHandler(void)
 	 * rxBuf's rxBuf->wrI pointer timely.
 	 * */
 	DMA_nMinus = (descr->CTRL & _DMA_CTRL_N_MINUS_1_MASK) >> _DMA_CTRL_N_MINUS_1_SHIFT;
-	if (DMA_nMinus_check_times++ > 10000) {
+	if (DMA_nMinus_check_times++ > 6000) {
 		int8_t temp = 0;
 
 		CORE_CriticalDisableIrq();
 		temp = g_DMA_nMinus - g_DMA_nMinutemp;
-		g_DMA_total_transfers += temp;
-		rxBuf.wrI += temp;
-		rxBuf.pendingBytes += temp;
-		g_DMA_nMinus = g_DMA_nMinutemp;
+		if (temp > 0) {
+			g_DMA_total_transfers += temp;
+			rxBuf.wrI += temp;
+			rxBuf.pendingBytes += temp;
+			g_DMA_nMinus = g_DMA_nMinutemp;
+		}
 		CORE_CriticalEnableIrq();
 
 		DMA_nMinus_check_times = 0;

@@ -412,7 +412,10 @@ void flushRxbuf(void)
 	cnt1 = TIMER_CounterGet(TIMER1);
 
 	CORE_CriticalDisableIrq();
-	pendbytes = (rxBuf.rdI + BUFFERSIZE - rxBuf.wrI) % BUFFERSIZE;
+	if (rxBuf.rdI == rxBuf.wrI)
+		pendbytes = 0;
+	else
+		pendbytes = BUFFERSIZE - (rxBuf.rdI + BUFFERSIZE - rxBuf.wrI) % BUFFERSIZE;
 	CORE_CriticalEnableIrq();
 
 	if (pendbytes >= CMD_LEN) {
@@ -456,11 +459,10 @@ void flushRxbuf(void)
 		 * */
 		CORE_CriticalDisableIrq();
 		temp = rxBuf.pendingBytes;
-		rxBuf.pendingBytes = 0;
 		wri_cnt = rxBuf.wrI;
 		CORE_CriticalEnableIrq();
 
-		if ((temp < CMD_LEN) && (wri_cnt < rxBuf.rdI) && (BUFFERSIZE - rxBuf.rdI < temp)) {
+		if ((temp != 0) && (temp < CMD_LEN) && (wri_cnt < rxBuf.rdI) && ((BUFFERSIZE - rxBuf.rdI) < temp)) {
 			memcpy(temp_buf, &rxBuf.data[rxBuf.rdI], BUFFERSIZE - rxBuf.rdI);
 			memcpy(temp_buf + BUFFERSIZE - rxBuf.rdI, &rxBuf.data[0], wri_cnt);
 
@@ -478,7 +480,7 @@ void flushRxbuf(void)
 			//dwSendData(&g_dwDev, temp_buf, temp);
 			//uwb_send_and_try_resend(&rxBuf.data[rxBuf.rdI], temp);
 		}
-
+		TIMER_Enable(TIMER1, false);
 //		rxBuf.rdI = rxBuf.wrI;
 //
 //		CORE_CriticalDisableIrq();

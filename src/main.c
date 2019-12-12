@@ -150,17 +150,17 @@ void uwb_send_and_try_resend(uint8_t *data, int len)
 
 	g_send_cnt++;
 	dwSendData(&g_dwDev, data, len);
-	delayms(1);
-	dwNewReceive(&g_dwDev);
-	dwStartReceive(&g_dwDev);
-
-	while (!g_dataRecvDone) {
-		delayms(1);
-		if (timeout++ > 2)
-			break;
-	}
-	g_dataRecvDone = false;
-	memcpy(temp, (void *)&g_recvSlaveFr, 4);
+//	delayms(1);
+//	dwNewReceive(&g_dwDev);
+//	dwStartReceive(&g_dwDev);
+//
+//	while (!g_dataRecvDone) {
+//		delayms(1);
+//		if (timeout++ > 2)
+//			break;
+//	}
+//	g_dataRecvDone = false;
+//	memcpy(temp, (void *)&g_recvSlaveFr, 4);
 
 //	cnt2 = TIMER_CounterGet(TIMER1);
 //	TIMER_Enable(TIMER1, false);
@@ -180,6 +180,17 @@ void fill_rxbuf(struct circularBuffer *rxBuf)
 		}
 
 	rxBuf->pendingBytes = BUFFERSIZE;
+}
+
+typedef void (*func)(void);
+
+void hardfault_test(void)
+{
+	func pc;
+
+	pc = 0xFFFFFFF9;
+
+	pc();
 }
 
 int main(void)
