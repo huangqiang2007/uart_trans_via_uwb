@@ -392,8 +392,6 @@ uint32_t uartGetData(uint8_t * dataPtr, uint32_t dataLen)
 SL_ALIGN(DMACTRL_ALIGNMENT)
 DMA_DESCRIPTOR_TypeDef dmaControlBlock1[DMACTRL_CH_CNT * 2] SL_ATTRIBUTE_ALIGN(DMACTRL_ALIGNMENT);
 
-//#define CMD_LEN 125
-uint8_t g_primaryResultBuffer[2] = {0}, g_alterResultBuffer[2] = {0};
 DMA_CB_TypeDef dma_uart_cb;
 #define DMA_BUFFER_NUMS 8
 
@@ -404,6 +402,7 @@ void flushRxbuf(void)
 {
 	uint8_t temp_buf[CMD_LEN];
 	uint32_t cnt1 = 0, cnt2 = 0, pendbytes = 0, remainbytes = 0;
+	int16_t temp = 0, wri_cnt = 0;
 
 	TIMER_CounterSet(TIMER1, 0);
 	TIMER_TopSet(TIMER1, 3125 * 10);
@@ -412,6 +411,8 @@ void flushRxbuf(void)
 	cnt1 = TIMER_CounterGet(TIMER1);
 
 	CORE_CriticalDisableIrq();
+	temp = rxBuf.pendingBytes;
+	wri_cnt = rxBuf.wrI;
 	if (rxBuf.rdI == rxBuf.wrI)
 		pendbytes = 0;
 	else
@@ -423,6 +424,7 @@ void flushRxbuf(void)
 		rxBuf.pendingBytes -= CMD_LEN;
 		remainbytes = BUFFERSIZE - rxBuf.rdI;
 		CORE_CriticalEnableIrq();
+
 		if (remainbytes < CMD_LEN) {
 			memcpy(temp_buf, &rxBuf.data[rxBuf.rdI], remainbytes);
 			memcpy(temp_buf + remainbytes, &rxBuf.data[0], CMD_LEN - remainbytes);
@@ -446,46 +448,44 @@ void flushRxbuf(void)
 			TIMER_Enable(TIMER1, false);
 			g_cnt2 = cnt2 - cnt1;
 		}
+	} else if (pendbytes > 0) {
+		int16_t total_DMA_trans = 0;
 
-//		CORE_CriticalDisableIrq();
-//		rxBuf.pendingBytes -= CMD_LEN;
-//		CORE_CriticalEnableIrq();
-	} else {
-		int16_t temp = 0, wri_cnt = 0;
-
-		/*
-		 * firstly get the bufferred bytes count, in case 'rxBuf.pendingBytes'
-		 * is updated in DMA interrupt concurrently.
-		 * */
 		CORE_CriticalDisableIrq();
-		temp = rxBuf.pendingBytes;
-		wri_cnt = rxBuf.wrI;
+		total_DMA_trans = g_DMA_total_transfers;
 		CORE_CriticalEnableIrq();
 
-		if ((temp != 0) && (temp < CMD_LEN) && (wri_cnt < rxBuf.rdI) && ((BUFFERSIZE - rxBuf.rdI) < temp)) {
-			memcpy(temp_buf, &rxBuf.data[rxBuf.rdI], BUFFERSIZE - rxBuf.rdI);
-			memcpy(temp_buf + BUFFERSIZE - rxBuf.rdI, &rxBuf.data[0], wri_cnt);
-
+		if (total_DMA_trans > 0) {
+			if (rxBuf.rdI < wri_cnt) {
 #if UWB_SEND_SWITCH
-			//dwSendData(&g_dwDev, temp_buf, temp);
-			uwb_send_and_try_resend(temp_buf, temp);
+			uwb_send_and_try_resend(&rxBuf.data[rxBuf.rdI], pendbytes);
 #else
-			uartPutData(&temp_buf, temp);
+			uartPutData(&temp_buf, pendbytes);
 #endif
+			} else {
+				if ((BUFFERSIZE - rxBuf.rdI + wri_cnt) > CMD_LEN)
+					while(1);
+
+				memcpy(temp_buf, &rxBuf.data[rxBuf.rdI], BUFFERSIZE - rxBuf.rdI);
+				memcpy(temp_buf + BUFFERSIZE - rxBuf.rdI, &rxBuf.data[0], wri_cnt);
+
+	#if UWB_SEND_SWITCH
+				uwb_send_and_try_resend(temp_buf, pendbytes);
+	#else
+				uartPutData(&temp_buf, temp);
+	#endif
+			}
+
+			/*
+			 * update rxBuf.rdI index
+			 * */
+			rxBuf.rdI = wri_cnt;
+
 			CORE_CriticalDisableIrq();
-			rxBuf.pendingBytes = 0;
-			rxBuf.rdI = rxBuf.wrI = 0;
+			rxBuf.pendingBytes -= temp;
 			CORE_CriticalEnableIrq();
-		} else {
-			//dwSendData(&g_dwDev, temp_buf, temp);
-			//uwb_send_and_try_resend(&rxBuf.data[rxBuf.rdI], temp);
 		}
 		TIMER_Enable(TIMER1, false);
-//		rxBuf.rdI = rxBuf.wrI;
-//
-//		CORE_CriticalDisableIrq();
-//		rxBuf.pendingBytes = 0;
-//		CORE_CriticalEnableIrq();
 	}
 }
 
